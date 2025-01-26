@@ -1,7 +1,14 @@
 from django.db import models
 from django.urls import reverse
+from django.db.models import Count
 from django.contrib.auth.models import User
 
+
+class TagQuerySet(models.QuerySet):
+    def popular(self):
+        most_popular_tags = self.annotate(posts_count=Count('posts')).order_by('-posts_count')
+        return most_popular_tags
+    
 
 class Post(models.Model):
     title = models.CharField('Заголовок', max_length=200)
@@ -37,6 +44,7 @@ class Post(models.Model):
         verbose_name_plural = 'посты'
 
 
+
 class Tag(models.Model):
     title = models.CharField('Тег', max_length=20, unique=True)
 
@@ -53,6 +61,8 @@ class Tag(models.Model):
         ordering = ['title']
         verbose_name = 'тег'
         verbose_name_plural = 'теги'
+    
+    objects = TagQuerySet.as_manager()
 
 
 class Comment(models.Model):
@@ -75,3 +85,4 @@ class Comment(models.Model):
         ordering = ['published_at']
         verbose_name = 'комментарий'
         verbose_name_plural = 'комментарии'
+
