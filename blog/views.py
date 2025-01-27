@@ -47,7 +47,9 @@ def index(request):
                                     .prefetch_related_author()\
                                     .fetch_with_comments_count()
 
-    most_fresh_posts = Post.objects.annotate(comments_count=Count('comments')).prefetch_related_author().order_by('-published_at')[:5]
+    most_fresh_posts = Post.objects.fresh()[:5]\
+                        .prefetch_related_author()
+
 
     most_popular_tags = Tag.objects.popular()\
                                     .prefetch_related('posts')[:5]
@@ -75,7 +77,7 @@ def post_detail(request, slug):
 
     likes = post.likes.all()
 
-    related_tags = post.tags.all()
+    related_tags = post.tags.popular()
 
     serialized_post = {
         'title': post.title,
@@ -89,10 +91,11 @@ def post_detail(request, slug):
         'tags': [serialize_tag(tag) for tag in related_tags],
     }
 
-    most_popular_tags = Tag.objects.popular()[:5]
+    most_popular_tags = Tag.objects.popular()[:5]\
+                                    .prefetch_related('posts')
 
-    most_popular_posts = Post.objects.popular()\
-                                    .prefetch_related('author')[:3]\
+    most_popular_posts = Post.objects.popular()[:5]\
+                                    .prefetch_related_author()\
                                     .fetch_with_comments_count()
 
     context = {
@@ -110,16 +113,16 @@ def tag_filter(request, tag_title):
 
     most_popular_tags = Tag.objects.popular()[:5]
 
-    most_popular_posts = Post.objects.popular()\
-                                    .prefetch_related('author')[:3]\
+    most_popular_posts = Post.objects.popular()[:5]\
+                                    .prefetch_related_author()\
                                     .fetch_with_comments_count()
 
-    related_posts = tag.posts.all()[:20]
+    related_posts = tag.posts.prefetch_related_author().annotate(comments_count=Count('comments'))[:20]
 
     context = {
         'tag': tag.title,
         'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
-        'posts': [serialize_post(post) for post in related_posts],
+        'posts': [serialize_post_optimized(post) for post in related_posts],
         'most_popular_posts': [
             serialize_post_optimized(post) for post in most_popular_posts
         ],

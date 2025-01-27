@@ -16,6 +16,11 @@ class PostQuerySet(models.QuerySet):
         return most_popular_posts
     
 
+    def fresh(self):
+        most_fresh_posts = Post.objects.annotate(comments_count=Count('comments')).order_by('-published_at')
+        return most_fresh_posts
+    
+
     def fetch_with_comments_count(self):
         most_popular_posts_ids = [post.id for post in self]
         posts_with_comments = Post.objects.filter(id__in=most_popular_posts_ids).annotate(
