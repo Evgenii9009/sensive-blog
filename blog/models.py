@@ -4,12 +4,6 @@ from django.db.models import Count, Prefetch
 from django.contrib.auth.models import User
 
 
-class TagQuerySet(models.QuerySet):
-    def popular(self):
-        most_popular_tags = self.annotate(posts_count=Count('posts')).order_by('-posts_count')
-        return most_popular_tags
-    
-
 class PostQuerySet(models.QuerySet):
     def popular(self):
         most_popular_posts = self.annotate(likes_count=Count('likes')).order_by('-likes_count')
@@ -60,23 +54,60 @@ class Post(models.Model):
         related_name='posts',
         verbose_name='Теги')
 
-    def __str__(self):
-        return self.title
-
-    def get_absolute_url(self):
-        return reverse('post_detail', args={'slug': self.slug})
-
     class Meta:
         ordering = ['-published_at']
         verbose_name = 'пост'
         verbose_name_plural = 'посты'
 
+    class PostQuerySet(models.QuerySet):
+        def popular(self):
+            most_popular_posts = self.annotate(likes_count=Count('likes')).order_by('-likes_count')
+            return most_popular_posts
+        
+    
+        def fresh(self):
+            most_fresh_posts = Post.objects.annotate(comments_count=Count('comments')).order_by('-published_at')
+            return most_fresh_posts
+        
+    
+        def fetch_with_comments_count(self):
+            most_popular_posts_ids = [post.id for post in self]
+            posts_with_comments = Post.objects.filter(id__in=most_popular_posts_ids).annotate(
+            comments_count=Count('comments'))
+            ids_and_comments = posts_with_comments.values_list('id', 'comments_count')
+            count_for_id = dict(ids_and_comments)
+            for post in self:
+                post.comments_count = count_for_id[post.id]
+            return self
+        
+    
+        def prefetch_related_author(self):
+            prefetch_related_author = self.prefetch_related('author', Prefetch('tags', queryset=Tag.objects.popular()))
+            return prefetch_related_author
+    
+    def __str__(self):
+        return self.title
+
+    def get_absolute_url(self):
+        return reverse('post_detail', args={'slug': self.slug})
+    
     objects = PostQuerySet.as_manager()
+
 
 
 
 class Tag(models.Model):
     title = models.CharField('Тег', max_length=20, unique=True)
+
+    class TagQuerySet(models.QuerySet):
+        def popular(self):
+            most_popular_tags = self.annotate(posts_count=Count('posts')).order_by('-posts_count')
+            return most_popular_tags
+
+    class Meta:
+        ordering = ['title']
+        verbose_name = 'тег'
+        verbose_name_plural = 'теги'
 
     def __str__(self):
         return self.title
@@ -86,13 +117,10 @@ class Tag(models.Model):
 
     def get_absolute_url(self):
         return reverse('tag_filter', args={'tag_title': self.slug})
-
-    class Meta:
-        ordering = ['title']
-        verbose_name = 'тег'
-        verbose_name_plural = 'теги'
     
     objects = TagQuerySet.as_manager()
+
+    
 
 
 class Comment(models.Model):
