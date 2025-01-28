@@ -3,6 +3,38 @@ from django.urls import reverse
 from django.db.models import Count, Prefetch
 from django.contrib.auth.models import User
 
+class PostQuerySet(models.QuerySet):
+    def popular(self):
+        most_popular_posts = self.annotate(likes_count=Count('likes')).order_by('-likes_count')
+        return most_popular_posts
+    
+
+    def fresh(self):
+        most_fresh_posts = Post.objects.annotate(comments_count=Count('comments')).order_by('-published_at')
+        return most_fresh_posts
+    
+
+    def fetch_with_comments_count(self):
+        most_popular_posts_ids = [post.id for post in self]
+        posts_with_comments = Post.objects.filter(id__in=most_popular_posts_ids).annotate(
+        comments_count=Count('comments'))
+        ids_and_comments = posts_with_comments.values_list('id', 'comments_count')
+        count_for_id = dict(ids_and_comments)
+        for post in self:
+            post.comments_count = count_for_id[post.id]
+        return self
+    
+
+    def prefetch_related_author(self):
+        prefetch_related_author = self.prefetch_related('author', Prefetch('tags', queryset=Tag.objects.popular()))
+        return prefetch_related_author
+    
+    
+class TagQuerySet(models.QuerySet):
+    def popular(self):
+        most_popular_tags = self.annotate(posts_count=Count('posts')).order_by('-posts_count')
+        return most_popular_tags
+    
 
 class Post(models.Model):
     title = models.CharField('Заголовок', max_length=200)
@@ -25,32 +57,6 @@ class Post(models.Model):
         'Tag',
         related_name='posts',
         verbose_name='Теги')
-    
-    class PostQuerySet(models.QuerySet):
-        def popular(self):
-            most_popular_posts = self.annotate(likes_count=Count('likes')).order_by('-likes_count')
-            return most_popular_posts
-        
-    
-        def fresh(self):
-            most_fresh_posts = Post.objects.annotate(comments_count=Count('comments')).order_by('-published_at')
-            return most_fresh_posts
-        
-    
-        def fetch_with_comments_count(self):
-            most_popular_posts_ids = [post.id for post in self]
-            posts_with_comments = Post.objects.filter(id__in=most_popular_posts_ids).annotate(
-            comments_count=Count('comments'))
-            ids_and_comments = posts_with_comments.values_list('id', 'comments_count')
-            count_for_id = dict(ids_and_comments)
-            for post in self:
-                post.comments_count = count_for_id[post.id]
-            return self
-        
-    
-        def prefetch_related_author(self):
-            prefetch_related_author = self.prefetch_related('author', Prefetch('tags', queryset=Tag.objects.popular()))
-            return prefetch_related_author
         
     objects = PostQuerySet.as_manager()
 
@@ -71,11 +77,6 @@ class Post(models.Model):
 
 class Tag(models.Model):
     title = models.CharField('Тег', max_length=20, unique=True)
-
-    class TagQuerySet(models.QuerySet):
-        def popular(self):
-            most_popular_tags = self.annotate(posts_count=Count('posts')).order_by('-posts_count')
-            return most_popular_tags
         
     objects = TagQuerySet.as_manager()
 
